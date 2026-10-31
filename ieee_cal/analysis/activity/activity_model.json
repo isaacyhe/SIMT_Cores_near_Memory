@@ -1,0 +1,261 @@
+{
+ "source": "scratchpad/actcov runs/vcd7net (30 baseline runs, net-level VCD truth), probe12 dc pools",
+ "model": {
+  "icache": {
+   "features": [
+    "busy",
+    "icache.dway_rdata_cyc",
+    "gpr_read_cycles",
+    "fpu_div",
+    "dcache.miss_secondary"
+   ],
+   "coef": [
+    18.226583969326377,
+    1.630239048201877,
+    164.6104100787831,
+    12381.5431681967,
+    590.6135772760871
+   ],
+   "truth_toggles_per_busy_mean": 122.44998862392477
+  },
+  "dcache": {
+   "features": [
+    "busy",
+    "dcache.read_data_cyc",
+    "dcache.dway_wdata_cyc",
+    "dcache.tag_hits",
+    "lsu_lanes_rd"
+   ],
+   "coef": [
+    8.59054474367263,
+    2.6306000241620846,
+    4.340828340780104,
+    552.3750941686022,
+    35.82746990946921
+   ],
+   "truth_toggles_per_busy_mean": 234.80295772333864
+  },
+  "fetch": {
+   "features": [
+    "busy",
+    "alu_arith",
+    "icache.st0_addr_cyc",
+    "gpr_read_cycles",
+    "lpath_addr_cyc"
+   ],
+   "coef": [
+    0.0523101735120661,
+    0.0,
+    4.508276477808275,
+    16.87305243220289,
+    0.0907125730412789
+   ],
+   "truth_toggles_per_busy_mean": 7.382749099151364
+  },
+  "decode": {
+   "features": [
+    "busy",
+    "issue_alu",
+    "lsu_disp_cyc",
+    "icache.data_ce_cycles"
+   ],
+   "coef": [
+    0.0,
+    82.16690875394949,
+    0.9838100158698311,
+    3.9839640935748695
+   ],
+   "truth_toggles_per_busy_mean": 31.300490526620713
+  },
+  "sched": {
+   "features": [
+    "busy",
+    "ipdom_q_cyc",
+    "lsu_lanes_rd"
+   ],
+   "coef": [
+    9.626329168975367,
+    11.659851868020707,
+    15.11894237131024
+   ],
+   "truth_toggles_per_busy_mean": 16.072822104502574
+  },
+  "gpr_opc": {
+   "features": [
+    "busy",
+    "opd_data_flips",
+    "alu_arith",
+    "dcache.dway_rdata_cyc"
+   ],
+   "coef": [
+    18.913793723730876,
+    5.964427985626837,
+    272.098796652298,
+    0.04877395970640056
+   ],
+   "truth_toggles_per_busy_mean": 116.39949812245817
+  },
+  "issue": {
+   "features": [
+    "busy",
+    "lsu_disp_cyc",
+    "gpr_writes"
+   ],
+   "coef": [
+    12.264555060094322,
+    5.6545925348630695,
+    166.05291518945856
+   ],
+   "truth_toggles_per_busy_mean": 140.47047124694024
+  },
+  "imul_idiv": {
+   "features": [
+    "busy",
+    "opd_data_flips",
+    "div_opd_flips",
+    "mdu_opd_cyc"
+   ],
+   "coef": [
+    3.6827259895452884,
+    1.1796141749711138,
+    56.511397103919414,
+    1.876320552040876
+   ],
+   "truth_toggles_per_busy_mean": 49.10507008400653
+  },
+  "alu": {
+   "features": [
+    "busy",
+    "sfu_disp_cyc",
+    "alu_arith"
+   ],
+   "coef": [
+    6.260407726977532,
+    16.75253497429533,
+    453.0984251688656
+   ],
+   "truth_toggles_per_busy_mean": 339.1848071701605
+  },
+  "fpu": {
+   "features": [
+    "busy",
+    "opd_data_flips",
+    "fpu_fma",
+    "lpath_wdata_cyc",
+    "active_warps_sum"
+   ],
+   "coef": [
+    0.0,
+    15.778634963095177,
+    5633.171250844978,
+    15.43842640266093,
+    6.024905783045683
+   ],
+   "truth_toggles_per_busy_mean": 313.6981945597323
+  },
+  "sfu": {
+   "features": [
+    "busy",
+    "fpu_disp_cyc"
+   ],
+   "coef": [
+    19.14857874757731,
+    5.245159793884255
+   ],
+   "truth_toggles_per_busy_mean": 109.88945806170558
+  },
+  "lmem": {
+   "features": [
+    "busy",
+    "lmem_addr_cyc",
+    "lmem_wdata_cyc",
+    "issue_sfu_wctl"
+   ],
+   "coef": [
+    0.0,
+    7.268713537999116,
+    2.6899797560091647,
+    50.43545187897329
+   ],
+   "truth_toggles_per_busy_mean": 32.09787008160953
+  },
+  "lsu": {
+   "features": [
+    "busy",
+    "lpath_addr_cyc",
+    "icache.read_data_flips",
+    "lmem_addr_cyc",
+    "alu_arith"
+   ],
+   "coef": [
+    8.280801752082573,
+    5.785825670647438,
+    0.46881234791511245,
+    3.475774038024392,
+    62.24139613076311
+   ],
+   "truth_toggles_per_busy_mean": 83.27648730997959
+  },
+  "commit": {
+   "features": [
+    "busy",
+    "wb_data_flips",
+    "stalled_active_warps_sum"
+   ],
+   "coef": [
+    0.0,
+    3.4692367383200162,
+    3.810406955454729
+   ],
+   "truth_toggles_per_busy_mean": 39.097134587151736
+  },
+  "core_other": {
+   "features": [
+    "busy",
+    "wb_data_flips",
+    "lmem_addr_cyc",
+    "lsu_rdata_cyc"
+   ],
+   "coef": [
+    15.421439866715502,
+    6.974683551631804,
+    15.213135284938142,
+    4.713602122184182
+   ],
+   "truth_toggles_per_busy_mean": 142.96226141710048
+  },
+  "mem_ic": {
+   "features": [
+    "busy",
+    "dcache.st0_data_flips",
+    "byp_creq_cyc",
+    "byp_crsp_cyc"
+   ],
+   "coef": [
+    0.4125809278260523,
+    0.8438782994163473,
+    1.8640941319320063,
+    2.674897345115908
+   ],
+   "truth_toggles_per_busy_mean": 15.350305744521055
+  }
+ },
+ "baseline_rtl_net_bits": {
+  "dcache": 24358,
+  "gpr_opc": 2765,
+  "fpu": 66597,
+  "icache": 15104,
+  "core_other": 6320,
+  "sched": 1175,
+  "mem_ic": 6840,
+  "fetch": 185,
+  "lsu": 3414,
+  "alu": 6442,
+  "decode": 359,
+  "issue": 10170,
+  "sfu": 7155,
+  "commit": 910,
+  "lmem": 1589,
+  "imul_idiv": 1672
+ }
+}

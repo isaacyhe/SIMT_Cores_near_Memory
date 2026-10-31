@@ -1,0 +1,37 @@
+####################################
+# global connections
+####################################
+add_global_connection -net {VDD} -inst_pattern {.*} -pin_pattern {^VDD$} -power
+add_global_connection -net {VDD} -inst_pattern {.*} -pin_pattern {^VDDPE$}
+add_global_connection -net {VDD} -inst_pattern {.*} -pin_pattern {^VDDCE$}
+add_global_connection -net {VSS} -inst_pattern {.*} -pin_pattern {^VSS$} -ground
+add_global_connection -net {VSS} -inst_pattern {.*} -pin_pattern {^VSSE$}
+global_connect
+####################################
+# voltage domains
+####################################
+set_voltage_domain -name {CORE} -power {VDD} -ground {VSS}
+####################################
+# standard cell grid
+####################################
+define_pdn_grid -name {top} -voltage_domains {CORE} -pins {M6}
+add_pdn_stripe -grid {top} -layer {M1} -width {0.018} -pitch {0.54} -offset {0} -followpins
+add_pdn_stripe -grid {top} -layer {M2} -width {0.018} -pitch {0.54} -offset {0} -followpins
+add_pdn_stripe -grid {top} -layer {M5} -width {0.12} -spacing {0.072} -pitch {5.4} -offset {0.300}
+add_pdn_stripe -grid {top} -layer {M6} -width {0.288} -spacing {0.096} -pitch {5.4} -offset {0.513}
+add_pdn_connect -grid {top} -layers {M1 M2}
+add_pdn_connect -grid {top} -layers {M2 M5}
+add_pdn_connect -grid {top} -layers {M5 M6}
+####################################
+# macro grid (FakRAM SRAM)
+####################################
+# FakRAM macros have VDD/VSS pins on M4 (horizontal).
+# Macros are 4.18µm wide but M5 pitch is 5.4µm — some macros may not have
+# an M5 strap passing through them. Use a macro-specific grid with its own
+# M5 stripes at tighter pitch to guarantee M4-M5 via coverage.
+define_pdn_grid -name {macro} -voltage_domains {CORE} -macro \
+    -cells {fakeram7_2x32 fakeram7_4x32 fakeram7_8x32 fakeram7_16x32 fakeram7_32x32 fakeram7_64x32 fakeram7_128x32 fakeram7_256x32 fakeram7_512x32 fakeram7_1024x32} \
+    -halo {0.5 0.5}
+add_pdn_stripe -grid {macro} -layer {M5} -width {0.12} -pitch {3.6} -offset {0.5}
+add_pdn_connect -grid {macro} -layers {M4 M5}
+add_pdn_connect -grid {macro} -layers {M5 M6}

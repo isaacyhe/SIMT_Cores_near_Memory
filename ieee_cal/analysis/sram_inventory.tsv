@@ -1,0 +1,49 @@
+# SRAM macro instances per routed layout (6_final.v), Oct 29; energy.py checks its derived macro counts against this
+layout	macros
+16t_8w	256x32:16 64x32:128
+16t_8w_no_cache	
+1t_1w	1024x32:4 64x32:128
+1t_1w_no_cache	
+1t_8w	1024x32:4 64x32:128
+1t_8w_icache_only	1024x32:4 64x32:64
+1t_8w_no_cache	
+2t_4w	1024x32:4 64x32:128
+2t_8w	1024x32:4 64x32:128
+2way_cache	1024x32:4 128x32:64
+4t_2w	1024x32:4 64x32:128
+4t_8w	1024x32:4 64x32:128
+8t_1w_no_cache_nolmem	
+8t_2w	512x32:8 64x32:128
+8t_2w_no_cache_nolmem	
+8t_4w	512x32:8 64x32:128
+8t_4w_no_cache_nolmem	
+baseline	1024x32:4 64x32:128
+combined_pnm	
+combined_pnm_lmem_nodiv	1024x32:4
+dcache_1k_2way	1024x32:4 64x32:64 8x32:32
+dcache_1k_2way_2w	1024x32:4 64x32:64 8x32:32
+dcache_1k_2way_8w	1024x32:4 64x32:64 8x32:32
+dcache_1k_4way	1024x32:4 4x32:64 64x32:64
+dcache_1k_4way_2w	1024x32:4 4x32:64 64x32:64
+dcache_1k_4way_8w	1024x32:4 4x32:64 64x32:64
+dcache_2k	1024x32:4 64x32:64 8x32:64
+dcache_32k	1024x32:4 128x32:64 64x32:64
+dcache_4k	1024x32:4 16x32:64 64x32:64
+dcache_4k_2w	1024x32:4 16x32:64 64x32:64
+dcache_4k_8w	1024x32:4 16x32:64 64x32:64
+dcache_512_4way	1024x32:4 2x32:64 64x32:64
+dcache_512_direct	1024x32:4 64x32:64 8x32:16
+dcache_64k	1024x32:4 256x32:64 64x32:64
+dcache_8k	1024x32:4 32x32:64 64x32:64
+direct_cache	1024x32:4 256x32:32
+half_cache	1024x32:4 32x32:128
+icache_only	1024x32:4 64x32:64
+no_cache	1024x32:4
+no_cache_nolmem	
+no_fpdiv	1024x32:4 64x32:128
+no_intdiv	1024x32:4 64x32:128
+no_lmem	64x32:128
+no_numeric	1024x32:4 64x32:128
+one_warp	1024x32:4 64x32:128
+quarter_cache	1024x32:4 16x32:128
+8t_16w	512x32:8 64x32:128

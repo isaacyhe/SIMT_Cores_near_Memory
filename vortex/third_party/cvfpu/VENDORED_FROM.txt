@@ -1,0 +1,10 @@
+cvfpu 79e453139072df42c9ec8f697132ba485d74e23d
+ 6aeee85d0a34fedc06c14f04fd6363c9f7b4eeea src/common_cells (v1.16.1-63-g6aeee85)
+ 86e1f558b3c95e91577c41b2fc452c86b04e85ac src/fpu_div_sqrt_mvp (v1.0.4)
+ 28be2d4fbf41b38fc37763bb6e90a1c88f6aaa61 tb/flexfloat (28be2d4)
+
+LOCAL MODIFICATION (GPU_and_PNM, 2026-10-24):
+  src/fpu_div_sqrt_mvp/hdl/defs_div_sqrt_mvp.sv: Iteration_unit_num_S 2'b10 -> 2'b01 (original kept as .orig_79e4531).
+  Reason: with 3 iteration units per cycle the div/sqrt iteration path misses 500 MHz at ASAP7 TT (placement STA -160..-170 ps);
+  with 2 units it meets (+121 ps). Measured FP32 latency: DIV = SQRT = 15 cycles (issue interval 15); FMA 4, CMP 2, CVT 5 unchanged.
+  Used identically by simulation (FPU_FPNEW) and synthesis.

@@ -1,0 +1,9 @@
+*.o
+*.so
+*.obj_dir/
+*.stamp
+trace.vcd
+*.vcd
+*.vcd.gz
+/eval_perf_swemu/results_*/
+/vortex/runtime/obj/

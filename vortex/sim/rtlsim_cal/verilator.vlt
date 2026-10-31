@@ -1,0 +1,12 @@
+`verilator_config
+
+lint_off -rule BLKANDNBLK -file "*/third_party/cvfpu/*"
+lint_off -rule UNOPTFLAT -file "*/third_party/cvfpu/*"
+lint_off -file "*/third_party/cvfpu/*"
+
+lint_off -rule BLKANDNBLK -file "*/third_party/hardfloat/*"
+lint_off -rule UNOPTFLAT -file "*/third_party/hardfloat/*"
+lint_off -file "*/third_party/hardfloat/*"
+
+// 2-line-per-way caches (512 B 4-way): counter is 1 bit, compared with a 32-bit constant; zero-extension is correct
+lint_off -rule WIDTHEXPAND -file "*/VX_cache_flush.sv"

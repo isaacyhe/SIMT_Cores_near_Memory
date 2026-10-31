@@ -1,0 +1,2 @@
+combined_pnm_fpnew 1.0 sfilter -n256 16x
+combined_pnm_fpnew 1.0 vecadd -n1024 16x

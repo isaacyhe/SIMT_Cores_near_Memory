@@ -1,0 +1,4 @@
+baseline_fpnew 1.0 sfilter -n256 16x
+baseline_fpnew 1.0 sgemm3 -n64 16x
+baseline_fpnew 1.0 transpose -width=512__-height=512 16x
+baseline_fpnew 1.0 vecadd -n1024 16x

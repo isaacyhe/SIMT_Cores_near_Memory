@@ -1,0 +1,1 @@
+dcache_512_direct_fpnew 1.0 vecadd -n1024 16x

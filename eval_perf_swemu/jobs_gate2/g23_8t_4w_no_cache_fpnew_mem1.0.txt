@@ -1,0 +1,1 @@
+8t_4w_no_cache_fpnew 1.0 vecadd -n1024 16x

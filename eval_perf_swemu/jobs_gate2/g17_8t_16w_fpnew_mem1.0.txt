@@ -1,0 +1,1 @@
+8t_16w_fpnew 1.0 vecadd -n1024 16x

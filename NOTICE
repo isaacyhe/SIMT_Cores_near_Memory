@@ -1,0 +1,9 @@
+This repository is licensed under the Apache License 2.0 (LICENSE), the license of the Vortex GPU it builds on.
+Bundled third-party components keep their own licenses, in their directories:
+  vortex/                          Vortex GPGPU, Apache-2.0 (vortex/LICENSE)
+  vortex/third_party/cvfpu/        FPnew / CVFPU, Solderpad Hardware License 0.51 and Apache-2.0 (see its LICENSE files)
+  vortex/third_party/ramulator/    Ramulator 2.0, MIT (with this study's DRAM command statistics: ramulator_local_changes.patch)
+  vortex/third_party/softfloat/    Berkeley SoftFloat 3, BSD-3-Clause (COPYING.txt)
+  vortex/runtime/common/nlohmann_json.hpp   nlohmann/json, MIT
+  pnr/designs/                     recipes for OpenROAD-flow-scripts (BSD-3-Clause); the ASAP7 PDK is not included
+Vendored commits are listed in vortex/third_party/VENDORED.txt.

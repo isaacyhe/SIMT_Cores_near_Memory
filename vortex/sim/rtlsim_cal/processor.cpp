@@ -1,0 +1,548 @@
+// gatesim_fpnew (calibration, Oct 31): sim/rtlsim/processor.cpp of the energy build, unchanged except three gate-only additions
+// marked GATESIM: the trace window comes from VX_TRACE_START / VX_TRACE_STOP (timestamps, 2 per core cycle, as TRACE_START_TIME /
+// TRACE_STOP_TIME in the RTL build), the VCD is dumped only inside it, and VX_EARLY_EXIT=1 ends the run after the window.
+// Copyright © 2019-2023
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "processor.h"
+
+#include "Vrtlsim_shim.h"
+
+#ifdef VCD_OUTPUT
+#include <verilated_vcd_c.h>
+#endif
+
+#include <iostream>
+#include <fstream>
+#include <iomanip>
+#include <mem.h>
+
+#include <VX_config.h>
+#include <ostream>
+#include <list>
+#include <queue>
+#include <vector>
+#include <sstream>
+#include <unordered_map>
+
+#include <dram_sim.h>
+#include <util.h>
+#include <ctr_dpi.h>
+#include <cstdlib>
+#include <unistd.h>   // GATESIM: _exit()
+#ifdef CORE_PERIOD_PS
+#define GATESIM_PERIOD_PS CORE_PERIOD_PS
+#else
+#define GATESIM_PERIOD_PS 2000   // as dram_sim.cpp's default
+#endif
+
+#ifndef MEM_CLOCK_RATIO
+#define MEM_CLOCK_RATIO 1
+#endif
+
+#ifndef TRACE_START_TIME
+#define TRACE_START_TIME 0ull
+#endif
+
+#ifndef TRACE_STOP_TIME
+#define TRACE_STOP_TIME -1ull
+#endif
+
+#ifndef VERILATOR_RESET_VALUE
+#define VERILATOR_RESET_VALUE 2
+#endif
+
+#ifndef VERILATOR_SEED
+#define VERILATOR_SEED 50
+#endif
+
+#if (XLEN == 32)
+typedef uint32_t Word;
+#elif (XLEN == 64)
+typedef uint64_t Word;
+#else
+#error unsupported XLEN
+#endif
+
+#define VL_WDATA_GETW(lwp, i, n, w) \
+  VL_SEL_IWII(0, n * w, 0, 0, lwp, i * w, w)
+
+using namespace vortex;
+
+static uint32_t g_mem_bank_addr_width = (PLATFORM_MEMORY_ADDR_WIDTH - log2ceil(PLATFORM_MEMORY_NUM_BANKS));
+
+static uint64_t timestamp = 0;
+
+double sc_time_stamp() {
+  return timestamp;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+static bool trace_enabled = false;
+static uint64_t trace_start_time = TRACE_START_TIME;
+static uint64_t trace_stop_time  = TRACE_STOP_TIME;
+
+bool sim_trace_enabled() {
+  if (timestamp >= trace_start_time
+   && timestamp < trace_stop_time)
+    return true;
+  return trace_enabled;
+}
+
+void sim_trace_enable(bool enable) {
+  trace_enabled = enable;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+class Processor::Impl {
+public:
+  Impl() : dram_sim_(PLATFORM_MEMORY_NUM_BANKS, PLATFORM_MEMORY_DATA_SIZE, MEM_CLOCK_RATIO) {
+    // force random values for uninitialized signals
+    Verilated::randReset(VERILATOR_RESET_VALUE);
+    Verilated::randSeed(VERILATOR_SEED);
+
+    // turn off assertion before reset
+    Verilated::assertOn(false);
+
+    // create RTL module instance
+    device_ = new Vrtlsim_shim();
+
+    // GATESIM: run-time trace window (same semantics as the RTL build's compile-time TRACE_START_TIME / TRACE_STOP_TIME)
+    // without both variables nothing is traced (the RTL defaults 0 / -1 would dump the whole gate-level run)
+    trace_start_time = trace_stop_time = ~0ull;
+    if (getenv("VX_TRACE_START") && getenv("VX_TRACE_STOP")) {
+      trace_start_time = strtoull(getenv("VX_TRACE_START"), nullptr, 10);
+      trace_stop_time  = strtoull(getenv("VX_TRACE_STOP"), nullptr, 10);
+      if (trace_start_time == 0 || trace_stop_time <= trace_start_time) { std::cerr << "[gatesim] bad trace window" << std::endl; _exit(2); }
+    }
+  #ifdef VCD_OUTPUT
+    Verilated::traceEverOn(true);
+    tfp_ = new VerilatedVcdC();
+    device_->trace(tfp_, 99);
+    tfp_->open("trace.vcd");
+  #endif
+
+    ram_ = nullptr;
+
+    // GPU_and_PNM: counter dump runs exactly once (destructor, or atexit if the host never deletes the Processor)
+    s_live_impl_ = this;
+    static bool atexit_registered = false;
+    if (!atexit_registered) { std::atexit([] { if (s_live_impl_) s_live_impl_->finalize(); }); atexit_registered = true; }
+
+    // reset the device
+    this->reset();
+
+    // Turn on assertion after reset
+    Verilated::assertOn(true);
+  }
+
+  ~Impl() {
+    this->cout_flush();
+
+    this->finalize();
+    if (s_live_impl_ == this) s_live_impl_ = nullptr;
+
+  #ifdef VCD_OUTPUT
+    tfp_->close();
+    delete tfp_;
+  #endif
+
+    delete device_;
+  }
+
+  // GPU_and_PNM (CAL per-run energy): run RTL final blocks (counter final dump) and write host-side totals, once.
+  void finalize() {
+    if (finalized_) return;
+    finalized_ = true;
+    device_->final();
+    dram_sim_.finalize();   // DRAM statistics are written even if the host never deletes the device (atexit path)
+    vx_ctr_total("core_ticks", core_ticks_);
+    vx_ctr_total("busy_ticks", busy_ticks_);
+    vx_ctr_total("dramsim_calls", dram_ticks_);  // DramSim::tick() calls = core ticks; DRAM ticks are dram_ticks_run in the DRAM summary
+    vx_ctr_total("launches", launches_);
+    vx_ctr_total("dram_queue_discards", dram_queue_discards_);
+    for (int b = 0; b < PLATFORM_MEMORY_NUM_BANKS; ++b) {
+      std::string sfx = "_bank" + std::to_string(b);
+      vx_ctr_total(("mem_rd_reqs" + sfx).c_str(), mem_rd_reqs_[b]);
+      vx_ctr_total(("mem_wr_reqs" + sfx).c_str(), mem_wr_reqs_[b]);
+      vx_ctr_total(("mem_wr_bytes" + sfx).c_str(), mem_wr_bytes_[b]);
+      vx_ctr_total(("io_cout_wr_reqs" + sfx).c_str(), io_cout_wr_reqs_[b]);
+    }
+    vx_ctr_close();
+  }
+
+  void cout_flush() {
+    for (auto& buf : print_bufs_) {
+      auto str = buf.second.str();
+      if (!str.empty()) {
+        std::cout << "#" << buf.first << ": " << str << std::endl;
+      }
+    }
+  }
+
+  void attach_ram(RAM* ram) {
+    ram_ = ram;
+  }
+
+  void run() {
+  #ifndef NDEBUG
+    std::cout << std::dec << timestamp << ": [sim] run()" << std::endl;
+  #endif
+
+    // reset device
+    this->reset();
+
+    // start
+    device_->reset = 0;
+    for (int b = 0; b < PLATFORM_MEMORY_NUM_BANKS; ++b) {
+      device_->mem_req_ready[b] = 1;
+    }
+
+    ++launches_;
+    in_run_ = true;
+
+    // wait on device to go busy
+    while (!device_->busy) {
+      this->tick();
+    }
+
+    // wait on device to go idle
+    while (device_->busy) {
+      this->tick();
+    }
+
+    in_run_ = false;
+
+    // stop
+    device_->reset = 1;
+
+    this->cout_flush();
+  }
+
+  void dcr_write(uint32_t addr, uint32_t value) {
+    device_->dcr_wr_valid = 1;
+    device_->dcr_wr_addr  = addr;
+    device_->dcr_wr_data  = value;
+    this->tick();
+    device_->dcr_wr_valid = 0;
+    this->tick();
+  }
+
+private:
+
+  void reset() {
+    this->mem_bus_reset();
+    this->dcr_bus_reset();
+
+    print_bufs_.clear();
+
+    for (auto& reqs : pending_mem_reqs_) {
+      reqs.clear();
+    }
+
+    for (int b = 0; b < PLATFORM_MEMORY_NUM_BANKS; ++b) {
+      dram_queue_discards_ += dram_queue_[b].size();  // structurally 0 (one push and one pop per bank per tick)
+      std::queue<mem_req_t*> empty;
+      std::swap(dram_queue_[b], empty);
+    }
+
+    device_->reset = 1;
+
+    // GPU_and_PNM: launch-boundary counter snapshot. The RTL groups dump on the reset edges below (clock edges only,
+    // no DRAM tick), so taking it never changes cycles. Tag pre_launch_<k> holds the totals before launch k.
+    vx_ctr_snapshot(ctor_reset_done_ ? ("pre_launch_" + std::to_string(launches_ + 1)).c_str() : "init", core_ticks_);
+    ctor_reset_done_ = true;
+
+    for (int i = 0; i < RESET_DELAY; ++i) {
+      device_->clk = 0;
+      this->eval();
+      device_->clk = 1;
+      this->eval();
+    }
+  }
+
+  void tick() {
+
+    // GPU_and_PNM: trace-window snapshots (calibration windows), taken before the edge of the first/last traced cycle
+    if (!trace_snap_started_ && timestamp >= trace_start_time && trace_start_time != 0) {
+      trace_snap_started_ = true;
+      vx_ctr_snapshot("trace_start", core_ticks_);
+    }
+    if (!trace_snap_stopped_ && timestamp >= trace_stop_time) {
+      trace_snap_stopped_ = true;
+      vx_ctr_snapshot("trace_stop", core_ticks_);
+      // GATESIM: end the run after the window, at the end of this tick: the RTL counter groups write the trace_stop epoch on
+      // this tick's clock edge (exiting here, before any edge, left that epoch empty)
+      if (getenv("VX_EARLY_EXIT")) early_exit_pending_ = true;
+    }
+    ++core_ticks_;
+    if (in_run_ && device_->busy) ++busy_ticks_;
+
+    device_->clk = 0;
+    this->eval();
+
+    this->mem_bus_eval(0);
+
+    device_->clk = 1;
+    this->eval();
+
+    this->mem_bus_eval(1);
+
+    dram_sim_.tick();
+    ++dram_ticks_;
+
+    for (int b = 0; b < PLATFORM_MEMORY_NUM_BANKS; ++b) {
+      if (!dram_queue_[b].empty()) {
+        auto mem_req = dram_queue_[b].front();
+        dram_sim_.send_request(mem_req->addr, mem_req->write, [](void* arg) {
+          // mark completed request as ready
+          auto orig_req = reinterpret_cast<mem_req_t*>(arg);
+          orig_req->ready = true;
+        }, mem_req, mem_req->byteen);
+        dram_queue_[b].pop();
+      }
+    }
+
+  #ifndef NDEBUG
+    fflush(stdout);
+  #endif
+    if (early_exit_pending_) {   // GATESIM
+    #ifdef VCD_OUTPUT
+      tfp_->flush(); tfp_->close();
+    #endif
+      std::cout << std::dec << timestamp << ": [gatesim] trace window done (core_ticks " << core_ticks_ << "); early exit" << std::endl << std::flush;
+      this->cout_flush();
+      vx_ctr_close();   // the trace_start / trace_stop epochs are in the counter file
+      _exit(0);
+    }
+  }
+
+  void eval() {
+    device_->eval();
+  #ifdef VCD_OUTPUT
+    if (sim_trace_enabled()) {
+      // GATESIM: VCD time in ps for OpenSTA read_vcd (timescale 1ps): eval() runs twice per core cycle, so each eval is half
+      // the design's period, counted from the window start (one cycle = CORE_PERIOD_PS, as the layout's sign-off clock)
+      tfp_->dump((timestamp - trace_start_time) * (uint64_t)(GATESIM_PERIOD_PS / 2));
+    }
+  #endif
+    ++timestamp;
+  }
+
+  void mem_bus_reset() {
+    for (int b = 0; b < PLATFORM_MEMORY_NUM_BANKS; ++b) {
+      device_->mem_req_ready[b] = 0;
+      device_->mem_rsp_valid[b] = 0;
+    }
+  }
+
+  void mem_bus_eval(bool clk) {
+    if (!clk) {
+      for (int b = 0; b < PLATFORM_MEMORY_NUM_BANKS; ++b) {
+        mem_rd_rsp_ready_[b] = device_->mem_rsp_ready[b];
+      }
+      return;
+    }
+
+    for (int b = 0; b < PLATFORM_MEMORY_NUM_BANKS; ++b) {
+      // process memory responses
+      if (device_->mem_rsp_valid[b] && mem_rd_rsp_ready_[b]) {
+        device_->mem_rsp_valid[b] = 0;
+      }
+      if (device_->mem_rsp_valid[b] == 0) {
+        if (!pending_mem_reqs_[b].empty()) {
+          auto mem_rsp_it = pending_mem_reqs_[b].begin();
+          auto mem_rsp = *mem_rsp_it;
+          if (mem_rsp->ready) {
+            if (!mem_rsp->write) {
+              // return read responses
+              device_->mem_rsp_valid[b] = 1;
+              memcpy(VDataCast<void*, PLATFORM_MEMORY_DATA_SIZE>::get(device_->mem_rsp_data[b]), mem_rsp->data.data(), PLATFORM_MEMORY_DATA_SIZE);
+              device_->mem_rsp_tag[b] = mem_rsp->tag;
+            }
+            // delete the request
+            pending_mem_reqs_[b].erase(mem_rsp_it);
+            delete mem_rsp;
+          }
+        }
+      }
+
+      // process memory requests
+      if (device_->mem_req_valid[b] && device_->mem_req_ready[b]) {
+      #if PLATFORM_MEMORY_INTERLEAVE == 1
+        uint64_t byte_addr = (uint64_t(device_->mem_req_addr[b]) * PLATFORM_MEMORY_NUM_BANKS + b) * PLATFORM_MEMORY_DATA_SIZE;
+      #else
+        uint64_t byte_addr = (uint64_t(device_->mem_req_addr[b]) + (b << g_mem_bank_addr_width)) * PLATFORM_MEMORY_DATA_SIZE;
+      #endif
+        // check read/write
+        if (device_->mem_req_rw[b]) {
+          auto byteen = device_->mem_req_byteen[b];
+          auto data = VDataCast<uint8_t*, PLATFORM_MEMORY_DATA_SIZE>::get(device_->mem_req_data[b]);
+          // check if console output address
+          if (byte_addr >= uint64_t(IO_COUT_ADDR)
+           && byte_addr < (uint64_t(IO_COUT_ADDR) + IO_COUT_SIZE)) {
+            ++io_cout_wr_reqs_[b];
+            // process console output
+            for (int i = 0; i < PLATFORM_MEMORY_DATA_SIZE; i++) {
+              if ((byteen >> i) & 0x1) {
+                auto& ss_buf = print_bufs_[i];
+                char c = data[i];
+                ss_buf << c;
+                if (c == '\n') {
+                  std::cout << std::dec << "#" << i << ": " << ss_buf.str() << std::flush;
+                  ss_buf.str("");
+                }
+              }
+            }
+          } else {
+            // process memory writes
+            /*printf("%0ld: [sim] MEM Wr Req[%d]: addr=0x%0lx, tag=0x%0lx, byteen=0x", timestamp, b, byte_addr, device_->mem_req_tag[b]);
+            for (int i = (PLATFORM_MEMORY_DATA_SIZE/4)-1; i >= 0; --i) {
+              printf("%x", (int)((byteen >> (4 * i)) & 0xf));
+            }
+            printf(", data=0x");
+            for (int i = PLATFORM_MEMORY_DATA_SIZE-1; i >= 0; --i) {
+              printf("%02x", data[i]);
+            }
+            printf("\n");*/
+
+            for (int i = 0; i < PLATFORM_MEMORY_DATA_SIZE; i++) {
+              if ((byteen >> i) & 0x1) {
+                (*ram_)[byte_addr + i] = data[i];
+              }
+            }
+
+            ++mem_wr_reqs_[b];
+            for (int i = 0; i < PLATFORM_MEMORY_DATA_SIZE; i++) mem_wr_bytes_[b] += (byteen >> i) & 0x1;
+
+            auto mem_req = new mem_req_t();
+            mem_req->tag   = device_->mem_req_tag[b];
+            mem_req->addr  = byte_addr;
+            mem_req->write = true;
+            mem_req->byteen = uint64_t(byteen);
+            mem_req->ready = false;
+
+            // enqueue dram request
+            dram_queue_[b].push(mem_req);
+
+            // add to pending list
+            pending_mem_reqs_[b].emplace_back(mem_req);
+          }
+        } else {
+          // process memory reads
+          ++mem_rd_reqs_[b];
+          auto mem_req = new mem_req_t();
+          mem_req->tag   = device_->mem_req_tag[b];
+          mem_req->addr  = byte_addr;
+          mem_req->write = false;
+          mem_req->ready = false;
+          ram_->read(mem_req->data.data(), byte_addr, PLATFORM_MEMORY_DATA_SIZE);
+
+          /*printf("%0ld: [sim] MEM Rd Req[%d]: addr=0x%0lx, tag=0x%0lx, data=0x", timestamp, b, byte_addr, device_->mem_req_tag[b]);
+          for (int i = PLATFORM_MEMORY_DATA_SIZE-1; i >= 0; --i) {
+            printf("%02x", mem_req->data[i]);
+          }
+          printf("\n");*/
+
+          // enqueue dram request
+          dram_queue_[b].push(mem_req);
+
+          // add to pending list
+          pending_mem_reqs_[b].emplace_back(mem_req);
+        }
+      }
+    }
+  }
+
+  void dcr_bus_reset() {
+    device_->dcr_wr_valid = 0;
+  }
+
+  void wait(uint32_t cycles) {
+    for (int i = 0; i < cycles; ++i) {
+      this->tick();
+    }
+  }
+
+private:
+
+  typedef struct {
+    Vrtlsim_shim* device;
+    std::array<uint8_t, PLATFORM_MEMORY_DATA_SIZE> data;
+    uint64_t addr;
+    uint64_t tag;
+    uint64_t byteen = ~0ull;  // GPU_and_PNM: write byte enables, passed to DramSim (CAL energy shadow)
+    bool write;
+    bool ready;
+  } mem_req_t;
+
+  std::unordered_map<int, std::stringstream> print_bufs_;
+
+  std::list<mem_req_t*> pending_mem_reqs_[PLATFORM_MEMORY_NUM_BANKS];
+
+  std::queue<mem_req_t*> dram_queue_[PLATFORM_MEMORY_NUM_BANKS];
+
+  std::array<bool, PLATFORM_MEMORY_NUM_BANKS> mem_rd_rsp_ready_;
+
+  DramSim dram_sim_;
+
+  Vrtlsim_shim* device_;
+
+  // GPU_and_PNM (CAL per-run energy): host-side counters
+  inline static Impl* s_live_impl_ = nullptr;
+  bool finalized_ = false;
+  bool ctor_reset_done_ = false;
+  bool in_run_ = false;
+  bool trace_snap_started_ = false;
+  bool trace_snap_stopped_ = false;
+  bool early_exit_pending_ = false;   // GATESIM
+  uint64_t core_ticks_ = 0;
+  uint64_t busy_ticks_ = 0;
+  uint64_t dram_ticks_ = 0;
+  uint64_t launches_ = 0;
+  uint64_t dram_queue_discards_ = 0;
+  uint64_t mem_rd_reqs_[PLATFORM_MEMORY_NUM_BANKS] = {};
+  uint64_t mem_wr_reqs_[PLATFORM_MEMORY_NUM_BANKS] = {};
+  uint64_t mem_wr_bytes_[PLATFORM_MEMORY_NUM_BANKS] = {};
+  uint64_t io_cout_wr_reqs_[PLATFORM_MEMORY_NUM_BANKS] = {};
+
+  RAM* ram_;
+
+#ifdef VCD_OUTPUT
+  VerilatedVcdC *tfp_;
+#endif
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+Processor::Processor()
+  : impl_(new Impl())
+{}
+
+Processor::~Processor() {
+  delete impl_;
+}
+
+void Processor::attach_ram(RAM* mem) {
+  impl_->attach_ram(mem);
+}
+
+void Processor::run() {
+  impl_->run();
+}
+
+void Processor::dcr_write(uint32_t addr, uint32_t value) {
+  return impl_->dcr_write(addr, value);
+}

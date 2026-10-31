@@ -1,0 +1,6 @@
+# Sign-off clock per layout (Oct 31; user clock grid 2000/2500/3000/4000/5000/6000/10000 ps). Layouts not listed: 2000 ps, 6_final.odb.
+# Read by floor_job.sh, activity/core_dyn_pack.sh and activity/core_dyn_job.sh (copied to the cloud as $T/signoff.tsv).
+layout	period_ps	odb	evidence
+16t_8w	3000	5_2_route.odb	user Oct 27: best 2526 ps; sta500v2/16t_8w_base_3000 +445.8 setup (base route)
+8t_16w	2500	6_final.odb	user Oct 30: -473.0 at 2000; sta_p2500 448183 setup +27.0 hold +26.1
+16t_16w	4000	6_final.odb	user Nov 1: setup -1706.9/-1206.9/-706.9 at 2000/2500/3000, +293.1 at 4000 (sta_p* 451531-451534); hold -94.3 rerouted (margin 150)

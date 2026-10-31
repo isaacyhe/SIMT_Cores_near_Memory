@@ -1,0 +1,2 @@
+ramulator a98665276f47d8e89fe667c4a60e5f9dd4d068bc https://github.com/CMU-SAFARI/ramulator2.git
+softfloat a0c6494cdc11865811dec815d5c0049fba9d82a8 https://github.com/ucb-bar/berkeley-softfloat-3.git

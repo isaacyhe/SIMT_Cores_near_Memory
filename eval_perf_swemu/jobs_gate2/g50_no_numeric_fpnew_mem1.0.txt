@@ -1,0 +1,2 @@
+no_numeric_fpnew 1.0 sfilter -n256 16x
+no_numeric_fpnew 1.0 vecadd -n1024 16x

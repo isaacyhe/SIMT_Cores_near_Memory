@@ -1,0 +1,14 @@
+# pCACTI cell leakage per bit at 0.45 V = 3.428 nW; per off fin = 1.225 nW
+# ASAP7 SRAM-Vt 111 cell: 4.2 to 10.3 pW/bit
+# ASAP7 SRAM-Vt 122 cell: 5.6 to 17.2 pW/bit
+# ASAP7 RVT-Vt 111 cell: 42.7 to 51.2 pW/bit
+# ASAP7 RVT-Vt 122 cell: 69.3 to 85.3 pW/bit
+# periphery factor pCACTI->ASAP7: RVT 0.0139 (1/72), LVT 0.1371 (1/7.3)
+macro	bits	pcacti_leak_uW_0p45	pcacti_cell_uW	pcacti_periph_uW	cell_SRAMVt122_uW(lo/mid/hi)	periph_RVT_uW	periph_LVT_uW	TOTAL_central_uW(SRAMVt cell+RVT periph)	TOTAL_low_uW	TOTAL_high_uW(RVT cell+LVT periph)	ratio_pcacti_over_central
+1024x32	32768	132.3	112.31	19.99	0.184/0.322/0.564	0.2783	2.740	0.600	0.462	5.535	221
+512x32	16384	66.24	56.16	10.08	0.092/0.161/0.282	0.1404	1.382	0.301	0.232	2.780	220
+256x32	8192	33.44	28.08	5.36	0.046/0.080/0.141	0.0746	0.735	0.155	0.121	1.434	216
+128x32	4096	14.89	14.04	0.85	0.023/0.040/0.070	0.0118	0.117	0.052	0.035	0.466	286
+64x32	2048	7.652	7.02	0.63	0.011/0.020/0.035	0.0088	0.087	0.029	0.020	0.261	265
+32x32	1024	3.975	3.51	0.47	0.006/0.010/0.018	0.0065	0.064	0.017	0.012	0.151	241
+16x32	512	2.095	1.75	0.34	0.003/0.005/0.009	0.0047	0.047	0.010	0.008	0.090	215

@@ -1,0 +1,9 @@
+`verilator_config
+
+lint_off -rule BLKANDNBLK -file "/home/user/GPU_and_PNM/vortex/third_party/cvfpu/*"
+lint_off -rule UNOPTFLAT -file "/home/user/GPU_and_PNM/vortex/third_party/cvfpu/*"
+lint_off -file "/home/user/GPU_and_PNM/vortex/third_party/cvfpu/*"
+
+lint_off -rule BLKANDNBLK -file "/home/user/GPU_and_PNM/vortex/third_party/hardfloat/*"
+lint_off -rule UNOPTFLAT -file "/home/user/GPU_and_PNM/vortex/third_party/hardfloat/*"
+lint_off -file "/home/user/GPU_and_PNM/vortex/third_party/hardfloat/*"
